@@ -1,22 +1,5 @@
 // main.dart
 // Health Monitor - Firebase Auth + SharedPreferences + local SQLite (sqflite)
-// Features:
-// - Firebase Email/Password auth (signup/login)
-// - Role selection on signup (patient | doctor) stored in Firebase user.displayName and locally in SharedPreferences
-// - SharedPreferences for small local settings (role, last email)
-// - Local SQLite (sqflite) for measurements storage and retrieval
-// - Role-based dashboards (patient sees own measurements; doctor sees all measurements and can add for patients)
-// - Simple modern UI with cards and clean layout
-
-// PUBSPEC (add these to pubspec.yaml dependencies):
-// firebase_core: ^3.0.0
-// firebase_auth: ^5.0.0
-// shared_preferences: ^2.0.15
-// sqflite: ^2.2.8+4
-// path: ^1.8.3
-// path_provider: ^2.0.15
-// intl: any
-// cupertino_icons: ^1.0.5
 
 import 'dart:async';
 
@@ -29,7 +12,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 
-// Import your generated Firebase options file
+// You must create this file in your project's lib/ directory
+// and configure Firebase using 'flutterfire configure'
 import 'firebase_options.dart';
 
 // ------------------------
@@ -99,16 +83,16 @@ class DBHelper {
       version: 1,
       onCreate: (db, v) async {
         await db.execute('''
-        CREATE TABLE measurements (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          patientId TEXT NOT NULL,
-          type TEXT NOT NULL,
-          value REAL NOT NULL,
-          unit TEXT NOT NULL,
-          recordedAt TEXT NOT NULL,
-          createdAt TEXT NOT NULL
-        );
-      ''');
+          CREATE TABLE measurements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patientId TEXT NOT NULL,
+            type TEXT NOT NULL,
+            value REAL NOT NULL,
+            unit TEXT NOT NULL,
+            recordedAt TEXT NOT NULL,
+            createdAt TEXT NOT NULL
+          );
+        ''');
       },
     );
   }
@@ -129,8 +113,12 @@ class DBHelper {
       where = 'WHERE patientId = ?';
       args = [patientId];
     }
+    // Corrected SQL query structure for better readability and safety
     final orderClause = 'ORDER BY recordedAt DESC';
-    final sql = 'SELECT * FROM measurements $where $orderClause LIMIT $limit';
+    final limitClause = 'LIMIT $limit';
+
+    // Use rawQuery for conditional WHERE clause
+    final sql = 'SELECT * FROM measurements $where $orderClause $limitClause';
     final rows = await database.rawQuery(sql, args);
     return rows.map((r) => Measurement.fromMap(r)).toList();
   }
@@ -174,7 +162,10 @@ class Prefs {
 
   static Future<void> clearAll() async {
     final p = await SharedPreferences.getInstance();
-    await p.clear();
+    // Only clear our specific keys to avoid clearing other potential data
+    await p.remove(keyRole);
+    await p.remove(keyLastEmail);
+    // You could use p.clear() if you are sure you want to clear EVERYTHING
   }
 }
 
@@ -184,7 +175,7 @@ class Prefs {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // Ensure DB initialized
+  // Ensure DB initialized, no changes needed here
   await DBHelper().db;
   runApp(const HealthApp());
 }
@@ -200,12 +191,7 @@ class HealthApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.teal,
         useMaterial3: true,
-        pageTransitionsTheme: const PageTransitionsTheme(
-          builders: {
-            TargetPlatform.android: ZoomPageTransitionsBuilder(),
-            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          },
-        ),
+        // Using default transitions is generally safer unless specific effect is required
       ),
       home: const AuthGate(),
     );
@@ -257,6 +243,14 @@ class _AuthScreenState extends State<AuthScreen> {
     });
   }
 
+  // Dispose controllers
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     final email = _emailCtrl.text.trim();
     final pass = _passCtrl.text;
@@ -270,17 +264,27 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() => _loading = true);
     try {
       if (_isLogin) {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        // --- FIX: Ensure role is stored locally on login ---
+        final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: pass,
         );
+        final userRole = cred.user?.displayName;
+        if (userRole != null &&
+            (userRole == 'patient' || userRole == 'doctor')) {
+          await Prefs.setRole(userRole);
+        } else {
+          // Fallback default role for old/uninitialized users
+          await Prefs.setRole('patient');
+        }
+        // ---------------------------------------------------
         await Prefs.setLastEmail(email);
       } else {
         final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
           password: pass,
         );
-        // store role both in Firebase user.displayName and locally
+        // store role both in Firebase user.displayName and locally (already correct for signup)
         await cred.user?.updateDisplayName(_role);
         await Prefs.setRole(_role);
         await Prefs.setLastEmail(email);
@@ -402,20 +406,33 @@ class _HomeRouterState extends State<HomeRouter> {
 
   Future<void> _loadRole() async {
     // Priority: SharedPreferences -> Firebase user.displayName -> default 'patient'
+    String? finalRole;
+
+    // 1. Try SharedPreferences
     final pRole = await Prefs.getRole();
     if (pRole != null) {
-      setState(() => _role = pRole);
-      return;
+      finalRole = pRole;
     }
+
+    // 2. If not in prefs, check Firebase user.displayName
     final u = FirebaseAuth.instance.currentUser;
     final fRole = u?.displayName;
-    if (fRole != null && (fRole == 'patient' || fRole == 'doctor')) {
-      await Prefs.setRole(fRole);
-      setState(() => _role = fRole);
-      return;
+
+    if (finalRole == null && fRole != null) {
+      if (fRole == 'patient' || fRole == 'doctor') {
+        finalRole = fRole;
+        // --- FIX: Save role to Prefs if fetched from Firebase for future fast loads ---
+        await Prefs.setRole(fRole);
+        // -----------------------------------------------------------------------------
+      }
     }
-    // default
-    setState(() => _role = 'patient');
+
+    // 3. Default to 'patient' if all else fails
+    if (finalRole == null) {
+      finalRole = 'patient';
+    }
+
+    if (mounted) setState(() => _role = finalRole);
   }
 
   @override
@@ -449,26 +466,38 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    // Only set loading state if not already loading
+    if (!_loading) setState(() => _loading = true);
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      // If user is null, sign out to return to AuthScreen
+      await _signOut();
+      return;
+    }
     final list = await _db.fetchMeasurements(patientId: uid);
-    setState(() {
-      _measurements = list;
-      _loading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _measurements = list;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _addMeasurement() async {
+    // await here ensures dashboard is reloaded when AddMeasurementScreen pops
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => AddMeasurementScreen(isDoctor: false)),
+      MaterialPageRoute(
+        builder: (_) => const AddMeasurementScreen(isDoctor: false),
+      ),
     );
+    // Reload measurements after adding
     await _load();
   }
 
   Future<void> _signOut() async {
     await FirebaseAuth.instance.signOut();
+    // Clear local user data (role, last email)
     await Prefs.clearAll();
   }
 
@@ -572,19 +601,25 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
   }
 
   Future<void> _loadAll() async {
-    setState(() => _loading = true);
+    if (!_loading) setState(() => _loading = true);
     final list = await _db.fetchMeasurements();
-    setState(() {
-      _measurements = list;
-      _loading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _measurements = list;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _addForPatient() async {
+    // await here ensures dashboard is reloaded when AddMeasurementScreen pops
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => AddMeasurementScreen(isDoctor: true)),
+      MaterialPageRoute(
+        builder: (_) => const AddMeasurementScreen(isDoctor: true),
+      ),
     );
+    // Reload all measurements after adding
     await _loadAll();
   }
 
@@ -646,7 +681,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
                           child: ListTile(
                             title: Text('${m.type} — ${m.value} ${m.unit}'),
                             subtitle: Text(
-                              'Patient: ${m.patientId} • ${DateFormat.yMMMd().add_jm().format(m.recordedAt.toLocal())}',
+                              'Patient ID: ${m.patientId} • ${DateFormat.yMMMd().add_jm().format(m.recordedAt.toLocal())}',
                             ),
                             trailing: IconButton(
                               icon: const Icon(Icons.delete_outline),
@@ -685,17 +720,49 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
   final _formKey = GlobalKey<FormState>();
   String _type = 'blood_glucose';
   final _valueCtrl = TextEditingController();
-  String _unit = 'mg/dL';
+  // Using an optional variable for unit to manage state changes better
+  String? _unit;
   DateTime _time = DateTime.now();
   bool _saving = false;
   final _patientIdCtrl = TextEditingController();
 
+  // Helper map to set default units based on type
+  static const Map<String, String> _defaultUnits = {
+    'blood_glucose': 'mg/dL',
+    'blood_pressure': 'mmHg',
+    'spo2': '%',
+    'weight': 'kg',
+  };
+
   @override
   void initState() {
     super.initState();
+    // Initialize patient ID for non-doctors
     if (!widget.isDoctor) {
       _patientIdCtrl.text = FirebaseAuth.instance.currentUser?.uid ?? '';
     }
+    // Initialize default unit
+    _unit = _defaultUnits[_type];
+    // Add listener to update unit when type changes (not necessary in this structure, but good for custom fields)
+    // The unit field is a TextFormField with an onChange, so this is fine.
+  }
+
+  // Dispose controllers
+  @override
+  void dispose() {
+    _valueCtrl.dispose();
+    _patientIdCtrl.dispose();
+    super.dispose();
+  }
+
+  // Method to update unit based on type selection
+  void _updateType(String? newType) {
+    if (newType == null) return;
+    setState(() {
+      _type = newType;
+      // Automatically set the default unit for the selected type
+      _unit = _defaultUnits[_type];
+    });
   }
 
   @override
@@ -703,7 +770,7 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.isDoctor ? 'Add measurement (doctor)' : 'Add measurement',
+          widget.isDoctor ? 'Add measurement (Doctor)' : 'Add measurement',
         ),
       ),
       body: Padding(
@@ -711,6 +778,8 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.stretch, // Use stretch for buttons
             children: [
               if (widget.isDoctor) ...[
                 TextFormField(
@@ -737,81 +806,108 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
                   DropdownMenuItem(value: 'spo2', child: Text('SpO2')),
                   DropdownMenuItem(value: 'weight', child: Text('Weight')),
                 ],
-                onChanged: (v) => setState(() => _type = v ?? 'blood_glucose'),
+                onChanged: _updateType, // Use the update method
                 decoration: const InputDecoration(labelText: 'Type'),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _valueCtrl,
-                decoration: const InputDecoration(labelText: 'Value'),
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-                validator: (s) =>
-                    (s == null || s.isEmpty) ? 'Enter a value' : null,
+                decoration: InputDecoration(
+                  labelText: 'Value',
+                  // Use the auto-updated unit as a hint/suffix
+                  suffixText: _unit,
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                validator: (s) {
+                  if (s == null || s.isEmpty) return 'Enter a value';
+                  if (double.tryParse(s) == null) return 'Invalid number';
+                  return null;
+                },
               ),
               const SizedBox(height: 8),
               TextFormField(
+                // Use the auto-updated unit or the last set unit
                 initialValue: _unit,
                 onChanged: (v) => _unit = v,
                 decoration: const InputDecoration(
                   labelText: 'Unit (e.g. mg/dL, mmHg, %)',
                 ),
+                validator: (s) =>
+                    (s == null || s.isEmpty) ? 'Enter a unit' : null,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               Row(
                 children: [
-                  Text(
-                    'Time: ${DateFormat.yMMMd().add_jm().format(_time.toLocal())}',
+                  Expanded(
+                    child: Text(
+                      // Ensure conversion to local time for display
+                      'Recorded: ${DateFormat.yMMMd().add_jm().format(_time.toLocal())}',
+                    ),
                   ),
-                  const SizedBox(width: 8),
                   TextButton(
                     onPressed: () async {
-                      final picked = await showDatePicker(
+                      final pickedDate = await showDatePicker(
                         context: context,
-                        initialDate: _time,
+                        initialDate: _time.toLocal(),
                         firstDate: DateTime(2000),
                         lastDate: DateTime.now(),
                       );
-                      if (picked != null) {
-                        final t = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(_time),
-                        );
-                        if (t != null) {
-                          setState(() {
-                            _time = DateTime(
-                              picked.year,
-                              picked.month,
-                              picked.day,
-                              t.hour,
-                              t.minute,
-                            );
-                          });
-                        }
-                      }
+                      if (pickedDate == null) return;
+
+                      final pickedTime = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.fromDateTime(_time.toLocal()),
+                      );
+                      if (pickedTime == null) return;
+
+                      // Combine picked date and time
+                      final newTime = DateTime(
+                        pickedDate.year,
+                        pickedDate.month,
+                        pickedDate.day,
+                        pickedTime.hour,
+                        pickedTime.minute,
+                      );
+
+                      if (mounted) setState(() => _time = newTime);
                     },
-                    child: const Text('Change'),
+                    child: const Text('Change Date/Time'),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
               _saving
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: const Text('Save Measurement'),
                       onPressed: () async {
                         if (!_formKey.currentState!.validate()) return;
+
                         setState(() => _saving = true);
                         try {
                           final patientId = _patientIdCtrl.text.trim();
                           final doc = Measurement(
                             patientId: patientId,
                             type: _type,
-                            value: double.parse(_valueCtrl.text),
-                            unit: _unit,
-                            recordedAt: _time.toUtc(),
+                            // Ensure parsing is robust for decimal input
+                            value: double.parse(
+                              _valueCtrl.text.replaceAll(',', '.'),
+                            ),
+                            unit: _unit!, // We validate it's not null/empty
+                            recordedAt: _time.toUtc(), // Store as UTC
                             createdAt: DateTime.now().toUtc(),
                           );
                           await DBHelper().insertMeasurement(doc);
-                          Navigator.pop(context);
+                          // Show success message before popping
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Measurement saved successfully!'),
+                            ),
+                          );
+                          if (mounted) Navigator.pop(context);
                         } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('Error saving: $e')),
@@ -820,7 +916,6 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
                           if (mounted) setState(() => _saving = false);
                         }
                       },
-                      child: const Text('Save measurement'),
                     ),
             ],
           ),
@@ -829,5 +924,3 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
     );
   }
 }
-
-// End of file
