@@ -264,7 +264,7 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() => _loading = true);
     try {
       if (_isLogin) {
-        // --- FIX: Ensure role is stored locally on login ---
+        // --- FIX: Ensure role is stored locally on login (already present) ---
         final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: pass,
@@ -290,15 +290,20 @@ class _AuthScreenState extends State<AuthScreen> {
         await Prefs.setLastEmail(email);
       }
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message ?? 'Auth error')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message ?? 'Auth error')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() => _loading = false);
     }
   }
 
@@ -339,7 +344,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   if (!_isLogin) ...[
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: _role,
+                      initialValue: _role,
                       items: const [
                         DropdownMenuItem(
                           value: 'patient',
@@ -421,7 +426,7 @@ class _HomeRouterState extends State<HomeRouter> {
     if (finalRole == null && fRole != null) {
       if (fRole == 'patient' || fRole == 'doctor') {
         finalRole = fRole;
-        // --- FIX: Save role to Prefs if fetched from Firebase for future fast loads ---
+        // --- FIX: Save role to Prefs if fetched from Firebase for future fast loads (already present) ---
         await Prefs.setRole(fRole);
         // -----------------------------------------------------------------------------
       }
@@ -705,7 +710,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
 }
 
 // ------------------------
-// Add Measurement Screen
+// Add Measurement Screen (FIXED)
 // ------------------------
 class AddMeasurementScreen extends StatefulWidget {
   final bool isDoctor;
@@ -720,8 +725,8 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
   final _formKey = GlobalKey<FormState>();
   String _type = 'blood_glucose';
   final _valueCtrl = TextEditingController();
-  // Using an optional variable for unit to manage state changes better
-  String? _unit;
+  // FIXED: Use a controller for the unit field to manage state reliably
+  final _unitCtrl = TextEditingController();
   DateTime _time = DateTime.now();
   bool _saving = false;
   final _patientIdCtrl = TextEditingController();
@@ -741,10 +746,8 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
     if (!widget.isDoctor) {
       _patientIdCtrl.text = FirebaseAuth.instance.currentUser?.uid ?? '';
     }
-    // Initialize default unit
-    _unit = _defaultUnits[_type];
-    // Add listener to update unit when type changes (not necessary in this structure, but good for custom fields)
-    // The unit field is a TextFormField with an onChange, so this is fine.
+    // Initialize default unit controller text
+    _unitCtrl.text = _defaultUnits[_type] ?? 'unit';
   }
 
   // Dispose controllers
@@ -752,6 +755,7 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
   void dispose() {
     _valueCtrl.dispose();
     _patientIdCtrl.dispose();
+    _unitCtrl.dispose(); // Dispose the new controller
     super.dispose();
   }
 
@@ -760,8 +764,11 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
     if (newType == null) return;
     setState(() {
       _type = newType;
-      // Automatically set the default unit for the selected type
-      _unit = _defaultUnits[_type];
+      // Automatically set the default unit in the controller for the selected type
+      _unitCtrl.text = _defaultUnits[_type] ?? 'unit';
+
+      // Since the unit field uses a controller, we don't need a separate _unit state variable
+      // or to call setState just to change the unit, but we keep setState for the _type change.
     });
   }
 
@@ -793,7 +800,7 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
                 const SizedBox(height: 8),
               ],
               DropdownButtonFormField<String>(
-                value: _type,
+                initialValue: _type,
                 items: const [
                   DropdownMenuItem(
                     value: 'blood_glucose',
@@ -814,8 +821,8 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
                 controller: _valueCtrl,
                 decoration: InputDecoration(
                   labelText: 'Value',
-                  // Use the auto-updated unit as a hint/suffix
-                  suffixText: _unit,
+                  // Use the unit controller's text as a suffix/hint
+                  suffixText: _unitCtrl.text,
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -827,10 +834,9 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
                 },
               ),
               const SizedBox(height: 8),
+              // FIXED: Use controller instead of initialValue/onChanged
               TextFormField(
-                // Use the auto-updated unit or the last set unit
-                initialValue: _unit,
-                onChanged: (v) => _unit = v,
+                controller: _unitCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Unit (e.g. mg/dL, mmHg, %)',
                 ),
@@ -855,6 +861,7 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
                         lastDate: DateTime.now(),
                       );
                       if (pickedDate == null) return;
+                      if (!mounted) return;
 
                       final pickedTime = await showTimePicker(
                         context: context,
@@ -896,22 +903,29 @@ class _AddMeasurementScreenState extends State<AddMeasurementScreen> {
                             value: double.parse(
                               _valueCtrl.text.replaceAll(',', '.'),
                             ),
-                            unit: _unit!, // We validate it's not null/empty
+                            unit: _unitCtrl.text
+                                .trim(), // Get unit from controller
                             recordedAt: _time.toUtc(), // Store as UTC
                             createdAt: DateTime.now().toUtc(),
                           );
                           await DBHelper().insertMeasurement(doc);
-                          // Show success message before popping
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Measurement saved successfully!'),
-                            ),
-                          );
-                          if (mounted) Navigator.pop(context);
+                          // Show success message before popping (guarded by mounted)
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Measurement saved successfully!',
+                                ),
+                              ),
+                            );
+                            Navigator.pop(context);
+                          }
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error saving: $e')),
-                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error saving: $e')),
+                            );
+                          }
                         } finally {
                           if (mounted) setState(() => _saving = false);
                         }

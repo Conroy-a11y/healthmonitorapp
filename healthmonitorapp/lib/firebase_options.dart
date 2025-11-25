@@ -41,48 +41,49 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAixnNUI5VGbTeSw4XWFDEOG8NcybZk8BY',
-    appId: '1:371859837216:web:0a7687e37c3649f48b4745',
-    messagingSenderId: '371859837216',
-    projectId: 'healthmonitorapp-79db5',
-    authDomain: 'healthmonitorapp-79db5.firebaseapp.com',
-    storageBucket: 'healthmonitorapp-79db5.firebasestorage.app',
-    measurementId: 'G-SPM5PZBSMS',
+    apiKey: 'AIzaSyAEt6MB9kPB5LK63bQkHHLh3b05ZPpNlm0',
+    appId: '1:159556622178:web:6ac63775994b70d0e2fe3b',
+    messagingSenderId: '159556622178',
+    projectId: 'healthmonitorapp-9abc9',
+    authDomain: 'healthmonitorapp-9abc9.firebaseapp.com',
+    storageBucket: 'healthmonitorapp-9abc9.firebasestorage.app',
+    measurementId: 'G-HWPBDWFQF2',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDrIaCYueG-f0SAeLnEhWGYhcS91iFC_vw',
-    appId: '1:371859837216:android:9a638896ff892f948b4745',
-    messagingSenderId: '371859837216',
-    projectId: 'healthmonitorapp-79db5',
-    storageBucket: 'healthmonitorapp-79db5.firebasestorage.app',
+    apiKey: 'AIzaSyADlb0Xy0pZP6rUyzefOJaL2DZvQp6YDO0',
+    appId: '1:159556622178:android:d935ac0ca5fd3397e2fe3b',
+    messagingSenderId: '159556622178',
+    projectId: 'healthmonitorapp-9abc9',
+    storageBucket: 'healthmonitorapp-9abc9.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAE53myfcTaKFkSdZg3dNIk7zqZoVuzkzg',
-    appId: '1:371859837216:ios:beffd1f500ef0dfc8b4745',
-    messagingSenderId: '371859837216',
-    projectId: 'healthmonitorapp-79db5',
-    storageBucket: 'healthmonitorapp-79db5.firebasestorage.app',
+    apiKey: 'AIzaSyB9ZKTB2j3f241y2KFVdk-sr5mkOcyY0C0',
+    appId: '1:159556622178:ios:124fba2b37bd010ae2fe3b',
+    messagingSenderId: '159556622178',
+    projectId: 'healthmonitorapp-9abc9',
+    storageBucket: 'healthmonitorapp-9abc9.firebasestorage.app',
     iosBundleId: 'com.example.healthmonitorapp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyAE53myfcTaKFkSdZg3dNIk7zqZoVuzkzg',
-    appId: '1:371859837216:ios:beffd1f500ef0dfc8b4745',
-    messagingSenderId: '371859837216',
-    projectId: 'healthmonitorapp-79db5',
-    storageBucket: 'healthmonitorapp-79db5.firebasestorage.app',
+    apiKey: 'AIzaSyB9ZKTB2j3f241y2KFVdk-sr5mkOcyY0C0',
+    appId: '1:159556622178:ios:124fba2b37bd010ae2fe3b',
+    messagingSenderId: '159556622178',
+    projectId: 'healthmonitorapp-9abc9',
+    storageBucket: 'healthmonitorapp-9abc9.firebasestorage.app',
     iosBundleId: 'com.example.healthmonitorapp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAixnNUI5VGbTeSw4XWFDEOG8NcybZk8BY',
-    appId: '1:371859837216:web:b84159428cd40e4c8b4745',
-    messagingSenderId: '371859837216',
-    projectId: 'healthmonitorapp-79db5',
-    authDomain: 'healthmonitorapp-79db5.firebaseapp.com',
-    storageBucket: 'healthmonitorapp-79db5.firebasestorage.app',
-    measurementId: 'G-3JM61S8T5Q',
+    apiKey: 'AIzaSyAEt6MB9kPB5LK63bQkHHLh3b05ZPpNlm0',
+    appId: '1:159556622178:web:c497fe7b66c7868ae2fe3b',
+    messagingSenderId: '159556622178',
+    projectId: 'healthmonitorapp-9abc9',
+    authDomain: 'healthmonitorapp-9abc9.firebaseapp.com',
+    storageBucket: 'healthmonitorapp-9abc9.firebasestorage.app',
+    measurementId: 'G-79JSC49LJD',
   );
+
 }
