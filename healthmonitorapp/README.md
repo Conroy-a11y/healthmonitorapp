@@ -1,200 +1,100 @@
-Health Monitor App
+Vitality App
 
-A Flutter-based health monitoring application with:
+A modern health-monitoring mobile application built with Flutter, featuring theme support, authentication flow handling, and a clean navigation architecture.
 
-Firebase Authentication (Email/Password)
+🚀 Overview
 
-Role-based access (Patient or Doctor)
+Vitality is a Flutter application designed with a focus on user experience and responsive UI.
+The app automatically checks whether the user is logged in and routes them to the correct screen:
 
-Local storage using SQLite (sqflite) for offline measurement storage
+If logged in → Navigate to Main Navigation
 
-SharedPreferences for lightweight local settings
+If not logged in → Show Login Page
 
-Modern, clean UI
+The app supports both light and dark themes, following the system preference.
 
-Role-based dashboards
-
-Patients: View & add their own measurements
-
-Doctors: View all measurements & add for any patient
-
-📌 Features
-🔐 Authentication
-
-Firebase Email/Password authentication
-
-Role selection during sign-up (patient/doctor)
-
-Role saved both in:
-
-Firebase (user.displayName)
-
-SharedPreferences (role)
-
-💾 Local Storage
-
-SharedPreferences
-
-Stores user role
-
-Stores last used email
-
-SQLite (sqflite) local DB
-
-Stores all measurements locally
-
-Measurements include:
-
-Patient ID (UID)
-
-Type (glucose, pressure, etc.)
-
-Value & unit
-
-Recorded time
-
-Created time
-
-📊 Role-Based Dashboards
-Patient Dashboard
-
-View your own measurements
-
-Add new measurements
-
-Delete measurements
-
-Quick profile card
-
-Floating action button for adding new entries
-
-Doctor Dashboard
-
-View all measurements (from local DB)
-
-Add measurements for any patient ID
-
-Delete measurements
-
-📝 Add Measurement Screen
-
-Supports multiple measurement types:
-
-Blood glucose
-
-Blood pressure
-
-SpO2
-
-Weight
-
-Date & time picker for measurement timestamp
-
-Doctor mode allows patient ID input
-
-📦 Project Structure Overview
+📂 Project Structure
 lib/
-├── main.dart
-├── firebase_options.dart
-├── models/
-│ └── measurement.dart
-├── services/
-│ ├── db_helper.dart
-│ └── prefs.dart
+│
+├── main.dart # Main entry point of the app
+├── theme.dart # Light & dark theme configuration
+│
 ├── screens/
-│ ├── auth_screen.dart
-│ ├── patient_dashboard.dart
-│ ├── doctor_dashboard.dart
-│ └── add_measurement_screen.dart
+│ ├── login_page.dart # Login screen UI
+│ └── main_navigation.dart # Main app UI after login
+│
+└── services/
+└── auth_service.dart # Authentication logic
 
-(Your current code is combined in one file, but can optionally be split like this.)
+🧩 Core Features
+🔐 Authentication Check
 
-📚 Dependencies
+The app uses an AuthChecker widget that performs an async login state check:
 
-Add these to your pubspec.yaml:
+Displays a loading spinner while checking.
 
-dependencies:
-flutter:
-sdk: flutter
+Routes users dynamically based on their authentication state.
 
-firebase_core: ^3.0.0
-firebase_auth: ^5.0.0
-shared_preferences: ^2.0.15
-sqflite: ^2.2.8+4
-path: ^1.8.3
-path_provider: ^2.0.15
-intl: any
-cupertino_icons: ^1.0.5
+🎨 Theming
 
-🚀 Getting Started
+lightTheme
 
-1. Install Flutter dependencies
+darkTheme
+
+Automatic theme switching based on device settings.
+
+🧭 Navigation
+
+Once authenticated, users are redirected to the MainNavigation screen.
+
+🛠️ How It Works
+main.dart
+
+Defines the root widget and sets up the themes and app entry point.
+
+void main() {
+runApp(const MyApp());
+}
+
+AuthChecker
+
+Handles routing based on login status using a FutureBuilder.
+
+FutureBuilder<bool>(
+future: AuthService().isLoggedIn(),
+...
+)
+
+📦 Dependencies
+
+Make sure your pubspec.yaml includes the necessary packages such as:
+
+flutter
+
+Any dependencies required by your auth_service.dart
+
+Additional packages your UI might use
+
+▶️ Getting Started
+
+1. Get dependencies
    flutter pub get
 
-2. Configure Firebase
-
-Add your firebase_options.dart file (generated via FlutterFire CLI)
-
-Ensure Firebase is initialized before running the app:
-
-await Firebase.initializeApp(
-options: DefaultFirebaseOptions.currentPlatform,
-);
-
-3. Run the application
+2. Run the app
    flutter run
 
-🛠 How It Works
-Authentication Flow
+3. live site: https://f7g09rt8r980y3zmv3tt.share.dreamflow.app
 
-App listens to FirebaseAuth.instance.authStateChanges()
+📌 Future Improvements
 
-If user not logged in → show AuthScreen
+Add Firebase or backend authentication
 
-If logged in → load role and route to correct dashboard
+Integrate persistent login state storage
 
-Role Determination Logic
+Add full user dashboard and medical tracking features
 
-Check SharedPreferences (role)
+Improve UI/UX transitions
 
-If missing, check Firebase user.displayName
+📝 License
 
-Fallback to "patient"
-
-Local Database (SQLite)
-
-Table: measurements
-
-Column Type Description
-id INTEGER Auto-increment ID
-patientId TEXT Firebase UID
-type TEXT Measurement type
-value REAL Value
-unit TEXT Unit (e.g. mg/dL)
-recordedAt TEXT Measurement timestamp
-createdAt TEXT Created timestamp
-📱 Screenshots (Recommended to Add)
-
-Login screen
-
-Patient dashboard
-
-Doctor dashboard
-
-Add measurement screen
-
-🧪 Future Improvements
-
-Sync SQLite ↔ Cloud Firestore
-
-Add charts (fl_chart)
-
-Push notifications
-
-Multi-language support (intl)
-
-📄 License
-
-This project is free to use, modify, and extend.
-
-site live at: https://f7g09rt80y3zmv3tt.share.dreamflow.app
+This project is open-source and available under your preferred license.
